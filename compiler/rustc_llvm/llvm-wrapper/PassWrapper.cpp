@@ -398,7 +398,8 @@ extern "C" LLVMTargetMachineRef LLVMRustCreateTargetMachine(
     bool EmitStackSizeSection, bool RelaxELFRelocations, bool UseInitArray,
     const char *SplitDwarfFile, const char *OutputObjFile,
     const char *DebugInfoCompression, bool UseEmulatedTls,
-    const char *ArgsCstrBuff, size_t ArgsCstrBuffLen) {
+    const char *ArgsCstrBuff, size_t ArgsCstrBuffLen,
+    const char *CompilerPath, const char *CommandlineArgs) {
 
   auto OptLevel = fromRust(RustOptLevel);
   auto RM = fromRust(RustReloc);
@@ -484,23 +485,8 @@ extern "C" LLVMTargetMachineRef LLVMRustCreateTargetMachine(
 
   Options.EmitStackSizeSection = EmitStackSizeSection;
 
+#if LLVM_VERSION_LT(20, 0)
   if (ArgsCstrBuff != nullptr) {
-#if LLVM_VERSION_GE(20, 0)
-    int buffer_offset = 0;
-    assert(ArgsCstrBuff[ArgsCstrBuffLen - 1] == '\0');
-    auto Arg0 = std::string(ArgsCstrBuff);
-    buffer_offset = Arg0.size() + 1;
-    auto ArgsCppStr = std::string(ArgsCstrBuff + buffer_offset,
-                                  ArgsCstrBuffLen - buffer_offset);
-    auto i = 0;
-    while (i != std::string::npos) {
-      i = ArgsCppStr.find('\0', i + 1);
-      if (i != std::string::npos)
-        ArgsCppStr.replace(i, 1, " ");
-    }
-    Options.MCOptions.Argv0 = Arg0;
-    Options.MCOptions.CommandlineArgs = ArgsCppStr;
-#else
     int buffer_offset = 0;
     assert(ArgsCstrBuff[ArgsCstrBuffLen - 1] == '\0');
 
@@ -525,9 +511,13 @@ extern "C" LLVMTargetMachineRef LLVMRustCreateTargetMachine(
 
     Options.MCOptions.Argv0 = arg0;
     Options.MCOptions.CommandLineArgs =
-        llvm::ArrayRef<std::string>(cmd_arg_strings, num_cmd_arg_strings);
-#endif
+      llvm::ArrayRef<std::string>(cmd_arg_strings, num_cmd_arg_strings);
   }
+#else // LLVM_VERSION_GE(20, 0)
+  Options.MCOptions.CommandlineArgs = CommandlineArgs != nullptr ? CommandlineArgs : "";
+  Options.MCOptions.Argv0 = CompilerPath != nullptr ? CompilerPath : "";
+#endif
+
 
   TargetMachine *TM = TheTarget->createTargetMachine(
       Trip.getTriple(), CPU, Feature, Options, RM, CM, OptLevel);
@@ -540,7 +530,6 @@ extern "C" void LLVMRustDisposeTargetMachine(LLVMTargetMachineRef TM) {
   delete[] MCOptions.Argv0;
   delete[] MCOptions.CommandLineArgs.data();
 #endif
-
   delete unwrap(TM);
 }
 
