@@ -316,6 +316,7 @@ symbols! {
         StructuralPartialEq,
         SubdiagMessage,
         Subdiagnostic,
+        SymbolIntern,
         Sync,
         SyncUnsafeCell,
         T,
@@ -2407,6 +2408,7 @@ impl Symbol {
     }
 
     /// Maps a string to its interned representation.
+    #[rustc_diagnostic_item = "SymbolIntern"]
     pub fn intern(string: &str) -> Self {
         with_session_globals(|session_globals| session_globals.symbol_interner.intern(string))
     }
